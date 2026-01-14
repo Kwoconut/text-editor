@@ -5,29 +5,8 @@ import (
 	"os"
 
 	"golang.org/x/term"
+	"texteditor/internal/keys"
 )
-
-type Key int
-
-const (
-	KeyChar Key = iota
-	KeyUp
-	KeyDown
-	KeyLeft
-	KeyRight
-	KeyUnknown
-)
-
-const (
-	ESCAPE             = 27
-	SQUARE_PARENTHESES = 91
-	CTRL_Q             = 17
-)
-
-type KeyEvent struct {
-	Kind Key
-	Char byte
-}
 
 func main() {
 	oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
@@ -36,72 +15,69 @@ func main() {
 	}
 	defer term.Restore(int(os.Stdin.Fd()), oldState)
 
-readKeyLoop:
+	terminalWidth, terminalHeight, _ := term.GetSize(int(os.Stdout.Fd()))
+	cursorX := 0
+	cursorY := 0
+	redraw(keys.KeyEvent{}, cursorX, cursorY, terminalWidth, terminalHeight)
+
 	for {
-		keyEvent := readKey()
+		keyEvent := keys.ReadKey()
+
+		if keyEvent.Kind == keys.KeyChar && keyEvent.Char == keys.CTRL_Q {
+			break
+		}
+
+		terminalWidth, terminalHeight, _ := term.GetSize(int(os.Stdout.Fd()))
 
 		switch keyEvent.Kind {
-		case KeyChar:
-			if keyEvent.Char == CTRL_Q {
-				break readKeyLoop
-			} else {
-				fmt.Printf("%c\r\n", keyEvent.Char)
+		case keys.KeyUp:
+			if cursorY >= 1 {
+				cursorY--
 			}
-		case KeyUp:
-			fmt.Print("UP\r\n")
-		case KeyDown:
-			fmt.Print("DOWN\r\n")
-		case KeyLeft:
-			fmt.Print("LEFT\r\n")
-		case KeyRight:
-			fmt.Print("RIGHT\r\n")
+		case keys.KeyDown:
+			if cursorY < terminalHeight-2 {
+				cursorY++
+			}
+		case keys.KeyLeft:
+			if cursorX >= 1 {
+				cursorX--
+			}
+		case keys.KeyRight:
+			if cursorX < terminalWidth-1 {
+				cursorX++
+			}
 		}
+
+		redraw(keyEvent, cursorX, cursorY, terminalWidth, terminalHeight)
 	}
 }
 
-func readKey() KeyEvent {
-	var b [1]byte
+func redraw(last keys.KeyEvent, cursorX, cursorY, terminalWidth, terminalHeight int) {
 
-	_, err := os.Stdin.Read(b[:])
+	os.Stdout.Write([]byte("\x1b[2J"))
+	os.Stdout.Write([]byte("\x1b[H"))
 
-	if err != nil {
-		return KeyEvent{Kind: KeyUnknown}
+	for i := 0; i < terminalHeight-1; i++ {
+		fmt.Print("~\r\n")
 	}
 
-	if b[0] != ESCAPE {
-		return KeyEvent{Kind: KeyChar, Char: b[0]}
-	} else {
-		_, err := os.Stdin.Read(b[:])
-
-		if err != nil {
-			return KeyEvent{Kind: KeyUnknown}
-		}
-
-		if b[0] == SQUARE_PARENTHESES {
-			_, err := os.Stdin.Read(b[:])
-
-			if err != nil {
-				return KeyEvent{Kind: KeyUnknown}
-			}
-
-			switch b[0] {
-			case 65:
-				return KeyEvent{Kind: KeyUp}
-			case 66:
-				return KeyEvent{Kind: KeyDown}
-			case 67:
-				return KeyEvent{Kind: KeyRight}
-			case 68:
-				return KeyEvent{Kind: KeyLeft}
-			}
+	switch last.Kind {
+	case keys.KeyChar:
+		if last.Char < 32 {
+			fmt.Printf("Ctrl+Q to quit | Last key: %d | Screen size: %d:%d", last.Char, terminalHeight, terminalWidth)
 		} else {
-			return KeyEvent{Kind: KeyUnknown}
+			fmt.Printf("Ctrl+Q to quit | Last key: %c | Screen size: %d:%d", last.Char, terminalHeight, terminalWidth)
 		}
+	case keys.KeyUp:
+		fmt.Printf("Ctrl+Q to quit | Last key: %s | Screen size: %d:%d", "Up", terminalHeight, terminalWidth)
+	case keys.KeyDown:
+		fmt.Printf("Ctrl+Q to quit | Last key: %s | Screen size: %d:%d", "Down", terminalHeight, terminalWidth)
+	case keys.KeyLeft:
+		fmt.Printf("Ctrl+Q to quit | Last key: %s | Screen size: %d:%d", "Left", terminalHeight, terminalWidth)
+	case keys.KeyRight:
+		fmt.Printf("Ctrl+Q to quit | Last key: %s | Screen size: %d:%d", "Right", terminalHeight, terminalWidth)
 	}
 
-	return KeyEvent{Kind: KeyUnknown}
-}
-
-func redraw(last KeyEvent) {
-	
+	moveCursorCommand := fmt.Sprintf("\x1b[%d;%dH", cursorY+1, cursorX+1) // ANSI cursor positions are 1-based
+	os.Stdout.Write([]byte(moveCursorCommand))
 }
