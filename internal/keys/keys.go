@@ -23,6 +23,7 @@ const (
 	SQUARE_PARENTHESES = 91
 	CTRL_Q             = 17
 	BACKSPACE          = 127
+	ENTER 						 = 13
 )
 
 func ReadKey() KeyEvent {
