@@ -2,6 +2,13 @@ package editor
 
 import "texteditor/internal/keys"
 
+type Action int
+
+const (
+	ActionNone Action = iota
+	ActionQuit
+)
+
 type EditorState struct {
 	cursorX int
 	cursorY int
@@ -33,21 +40,41 @@ func (es *EditorState) Cursor() (int, int) {
 }
 
 func (es *EditorState) Cell(x int, y int) (byte, bool) {
-	if char, ok := es.cells[[2]int{x, y}]; ok {
-		return char, ok
-	}
-
-	return 0, false
+	char, ok := es.cells[[2]int{x, y}]
+	return char, ok
 }
 
 func (es *EditorState) UpdateSize(w, h int) {
 	es.width = w
 	es.height = h
+	es.clampCursor()
 }
 
-func (es *EditorState) HandleKey(keyEvent keys.KeyEvent) bool {
+func (es *EditorState) ContentHeight() int {
+	if es.height <= 1 {
+		return 0
+	}
+	return es.height - 1
+}
+
+func (es *EditorState) MaxCursorY() int {
+	h := es.ContentHeight()
+	if h == 0 {
+		return 0
+	}
+	return h - 1
+}
+
+func (es *EditorState) MaxCursorX() int {
+	if es.width <= 0 {
+		return 0
+	}
+	return es.width - 1
+}
+
+func (es *EditorState) HandleKey(keyEvent keys.KeyEvent) Action {
 	if keyEvent.Kind == keys.KeyChar && keyEvent.Char == keys.CTRL_Q {
-		return true
+		return ActionQuit
 	}
 
 	switch keyEvent.Kind {
@@ -69,64 +96,65 @@ func (es *EditorState) HandleKey(keyEvent keys.KeyEvent) bool {
 		}
 	}
 
-	return false
+	es.clampCursor()
+	return ActionNone
+}
+
+func (es *EditorState) clampCursor() {
+	if es.cursorX < 0 {
+		es.cursorX = 0
+	}
+	if es.cursorX > es.MaxCursorX() {
+		es.cursorX = es.MaxCursorX()
+	}
+	if es.cursorY < 0 {
+		es.cursorY = 0
+	}
+	if es.cursorY > es.MaxCursorY() {
+		es.cursorY = es.MaxCursorY()
+	}
 }
 
 func (es *EditorState) moveLeft() {
 	es.cursorX--
-	if es.cursorX < 0 {
-		es.cursorX = 0
-	}
 }
 
 func (es *EditorState) moveRight() {
 	es.cursorX++
-	if es.cursorX > es.width-1 {
-		es.cursorX = es.width - 1
-	}
 }
 
 func (es *EditorState) moveUp() {
 	es.cursorY--
-	if es.cursorY < 0 {
-		es.cursorY = 0
-	}
 }
 
 func (es *EditorState) moveDown() {
 	es.cursorY++
-	if es.cursorY > es.height-2 {
-		es.cursorY = es.height - 2
-	}
 }
 
 func (es *EditorState) insert(ch byte) {
 	es.cells[[2]int{es.cursorX, es.cursorY}] = ch
 	es.cursorX++
-	if es.cursorX >= es.width {
+	if es.cursorX > es.MaxCursorX() {
 		es.cursorX = 0
-		if es.cursorY < es.height-2 {
+		if es.cursorY < es.MaxCursorY() {
 			es.cursorY++
 		}
 	}
 }
 
 func (es *EditorState) backspace() {
-	if es.cursorX != 0 || es.cursorY != 0 {
-		if es.cursorX >= 0 {
-			es.cursorX--
-			if es.cursorX < 0 && es.cursorY > 0 {
-				es.cursorY--
-				es.cursorX = es.width - 1
-			}
-		}
+	if es.cursorX > 0 {
+		es.cursorX--
+	} else if es.cursorY > 0 {
+		es.cursorY--
+		es.cursorX = es.MaxCursorX()
 	}
 	delete(es.cells, [2]int{es.cursorX, es.cursorY})
 }
 
 func (es *EditorState) enter() {
 	es.cursorX = 0
-	if es.cursorY < es.height-2 {
+	if es.cursorY < es.MaxCursorY() {
 		es.cursorY++
 	}
 }

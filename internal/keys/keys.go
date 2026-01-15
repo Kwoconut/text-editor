@@ -1,6 +1,9 @@
 package keys
 
-import "os"
+import (
+	"fmt"
+	"io"
+)
 
 type Key int
 
@@ -26,10 +29,10 @@ const (
 	ENTER 						 = 13
 )
 
-func ReadKey() KeyEvent {
+func ReadKey(r io.Reader) KeyEvent {
 	var b [1]byte
 
-	_, err := os.Stdin.Read(b[:])
+	_, err := r.Read(b[:])
 
 	if err != nil {
 		return KeyEvent{Kind: KeyUnknown}
@@ -38,14 +41,14 @@ func ReadKey() KeyEvent {
 	if b[0] != ESCAPE {
 		return KeyEvent{Kind: KeyChar, Char: b[0]}
 	} else {
-		_, err := os.Stdin.Read(b[:])
+		_, err := r.Read(b[:])
 
 		if err != nil {
 			return KeyEvent{Kind: KeyUnknown}
 		}
 
 		if b[0] == SQUARE_PARENTHESES {
-			_, err := os.Stdin.Read(b[:])
+			_, err := r.Read(b[:])
 
 			if err != nil {
 				return KeyEvent{Kind: KeyUnknown}
@@ -67,4 +70,28 @@ func ReadKey() KeyEvent {
 	}
 
 	return KeyEvent{Kind: KeyUnknown}
+}
+
+func KeyLabel(keyEvent KeyEvent) string {
+	switch keyEvent.Kind {
+	case KeyChar:
+		if keyEvent.Char == ENTER {
+			return "ENTER"
+		} else if keyEvent.Char < 32 && keyEvent.Char != ENTER {
+			return fmt.Sprintf("%d", keyEvent.Char)
+		} else if keyEvent.Char < 127 {
+			return string(keyEvent.Char)
+		} else if keyEvent.Char == BACKSPACE {
+			return "BACKSPACE"
+		}
+	case KeyUp:
+		return "UP"
+	case KeyDown:
+		return "DOWN"
+	case KeyLeft:
+		return "LEFT"
+	case KeyRight:
+		return "RIGHT"
+	}
+	return "UNKNOWN"
 }
