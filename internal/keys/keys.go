@@ -4,6 +4,11 @@ import "os"
 
 type Key int
 
+type KeyEvent struct {
+	Kind Key
+	Char byte
+}
+
 const (
 	KeyChar Key = iota
 	KeyUp
@@ -17,12 +22,8 @@ const (
 	ESCAPE             = 27
 	SQUARE_PARENTHESES = 91
 	CTRL_Q             = 17
+	BACKSPACE          = 127
 )
-
-type KeyEvent struct {
-	Kind Key
-	Char byte
-}
 
 func ReadKey() KeyEvent {
 	var b [1]byte
