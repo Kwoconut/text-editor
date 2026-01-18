@@ -12,7 +12,7 @@ const (
 type EditorState struct {
 	cursorX int
 	cursorY int
-	cells   map[[2]int]byte
+	lines   [][]rune
 	width   int
 	height  int
 }
@@ -21,7 +21,7 @@ func New(w, h int) *EditorState {
 	return &EditorState{
 		cursorX: 0,
 		cursorY: 0,
-		cells:   make(map[[2]int]byte),
+		lines:   [][]rune{[]rune{}},
 		width:   w,
 		height:  h,
 	}
@@ -39,37 +39,18 @@ func (es *EditorState) Cursor() (int, int) {
 	return es.cursorX, es.cursorY
 }
 
-func (es *EditorState) Cell(x int, y int) (byte, bool) {
-	char, ok := es.cells[[2]int{x, y}]
-	return char, ok
-}
-
 func (es *EditorState) UpdateSize(w, h int) {
 	es.width = w
 	es.height = h
 	es.clampCursor()
 }
 
-func (es *EditorState) ContentHeight() int {
-	if es.height <= 1 {
-		return 0
-	}
-	return es.height - 1
+func (es *EditorState) LineCount() int {
+	return len(es.lines)
 }
 
-func (es *EditorState) MaxCursorY() int {
-	h := es.ContentHeight()
-	if h == 0 {
-		return 0
-	}
-	return h - 1
-}
-
-func (es *EditorState) MaxCursorX() int {
-	if es.width <= 0 {
-		return 0
-	}
-	return es.width - 1
+func (es *EditorState) Line(y int) []rune {
+	return es.lines[y]
 }
 
 func (es *EditorState) HandleKey(keyEvent keys.KeyEvent) Action {
@@ -88,7 +69,7 @@ func (es *EditorState) HandleKey(keyEvent keys.KeyEvent) Action {
 		es.moveDown()
 	case keys.KeyChar:
 		if keyEvent.Char >= 32 && keyEvent.Char <= 126 {
-			es.insert(keyEvent.Char)
+			es.insert(rune(keyEvent.Char))
 		} else if keyEvent.Char == keys.BACKSPACE {
 			es.backspace()
 		} else if keyEvent.Char == keys.ENTER {
@@ -101,26 +82,43 @@ func (es *EditorState) HandleKey(keyEvent keys.KeyEvent) Action {
 }
 
 func (es *EditorState) clampCursor() {
-	if es.cursorX < 0 {
-		es.cursorX = 0
+	if len(es.lines) == 0 {
+		es.lines = [][]rune{[]rune{}}
 	}
-	if es.cursorX > es.MaxCursorX() {
-		es.cursorX = es.MaxCursorX()
-	}
+
 	if es.cursorY < 0 {
 		es.cursorY = 0
 	}
-	if es.cursorY > es.MaxCursorY() {
-		es.cursorY = es.MaxCursorY()
+
+	if es.cursorY >= len(es.lines) {
+		es.cursorY = len(es.lines) - 1
+	}
+
+	if es.cursorX < 0 {
+		es.cursorX = 0
+	}
+
+	if es.cursorX > len(es.lines[es.cursorY]) {
+		es.cursorX = len(es.lines[es.cursorY])
 	}
 }
 
 func (es *EditorState) moveLeft() {
-	es.cursorX--
+	if es.cursorX > 0 {
+		es.cursorX--
+	} else if es.cursorY > 0 {
+		es.cursorY--
+		es.cursorX = len(es.lines[es.cursorY])
+	}
 }
 
 func (es *EditorState) moveRight() {
-	es.cursorX++
+	if es.cursorX < len(es.lines[es.cursorY]) {
+		es.cursorX++
+	} else if es.cursorY < len(es.lines)-1 {
+		es.cursorY++
+		es.cursorX = 0
+	}
 }
 
 func (es *EditorState) moveUp() {
@@ -131,30 +129,49 @@ func (es *EditorState) moveDown() {
 	es.cursorY++
 }
 
-func (es *EditorState) insert(ch byte) {
-	es.cells[[2]int{es.cursorX, es.cursorY}] = ch
+func (es *EditorState) insert(ch rune) {
+	line := es.lines[es.cursorY]
+
+	x := es.cursorX
+	line = append(line, 0)
+	copy(line[x+1:], line[x:])
+	line[x] = ch
+
+	es.lines[es.cursorY] = line
 	es.cursorX++
-	if es.cursorX > es.MaxCursorX() {
-		es.cursorX = 0
-		if es.cursorY < es.MaxCursorY() {
-			es.cursorY++
-		}
-	}
 }
 
 func (es *EditorState) backspace() {
-	if es.cursorX > 0 {
-		es.cursorX--
-	} else if es.cursorY > 0 {
-		es.cursorY--
-		es.cursorX = es.MaxCursorX()
+	if es.cursorX == 0 && es.cursorY == 0 {
+		return
 	}
-	delete(es.cells, [2]int{es.cursorX, es.cursorY})
+
+	if es.cursorX > 0 {
+		line := es.lines[es.cursorY]
+		x := es.cursorX
+		copy(line[x-1:], line[x:])
+		line = line[:len(line)-1]
+		es.lines[es.cursorY] = line
+		es.cursorX--
+		return
+	}
+
+	previousLine := es.lines[es.cursorY-1]
+	oldLen := len(previousLine)
+	currentLine := es.lines[es.cursorY]
+	newPreviousLine := append(previousLine, currentLine...)
+	es.lines[es.cursorY-1] = newPreviousLine
+	es.lines = append(es.lines[:es.cursorY], es.lines[es.cursorY+1:]...)
+	es.cursorY--
+	es.cursorX = oldLen
 }
 
 func (es *EditorState) enter() {
+	line := es.lines[es.cursorY]
+	left := line[:es.cursorX]
+	right := line[es.cursorX:]
+	es.lines[es.cursorY] = left
+	es.lines = append(es.lines[:es.cursorY+1], append([][]rune{right}, es.lines[es.cursorY+1:]...)...)
+	es.cursorY++
 	es.cursorX = 0
-	if es.cursorY < es.MaxCursorY() {
-		es.cursorY++
-	}
 }

@@ -20,13 +20,27 @@ func Draw(w io.Writer, es *editor.EditorState, last keys.KeyEvent) {
 	contentH := screenH - 1
 
 	for y := 0; y < contentH; y++ {
-		for x := 0; x < contentW; x++ {
-			if char, ok := es.Cell(x, y); ok {
-				stringBuilder.WriteByte(char)
-			} else if x == 0 {
-				stringBuilder.WriteByte('~')
-			} else {
-				stringBuilder.WriteByte(' ')
+		if y < es.LineCount() {
+			currentLine := es.Line(y)
+
+			currentX := 0
+			for currentX < contentW {
+				if currentX < len(currentLine) {
+					stringBuilder.WriteRune(currentLine[currentX])
+				} else {
+					stringBuilder.WriteByte(' ')
+				}
+				currentX++
+			}
+		} else {
+			currentX := 0
+			for currentX < contentW {
+				if currentX == 0 {
+					stringBuilder.WriteByte('~')
+				} else {
+					stringBuilder.WriteByte(' ')
+				}
+				currentX++
 			}
 		}
 
@@ -34,7 +48,6 @@ func Draw(w io.Writer, es *editor.EditorState, last keys.KeyEvent) {
 	}
 
 	fmt.Fprintf(&stringBuilder, "Ctrl+Q to quit | Last key: %s | Screen size: %d:%d", keys.KeyLabel(last), screenW, screenH)
-
 	cursorX, cursorY := es.Cursor()
 	fmt.Fprintf(&stringBuilder, "\x1b[%d;%dH", cursorY+1, cursorX+1) // ANSI cursor positions are 1-based
 	io.WriteString(w, stringBuilder.String())
