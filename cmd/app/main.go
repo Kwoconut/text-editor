@@ -22,9 +22,9 @@ func main() {
 	}
 	defer term.Restore(int(os.Stdin.Fd()), oldState)
 
-	textReadFromFile, _ := readFromFile(path)
+	initialText, _ := readFromFile(path)
 	terminalWidth, terminalHeight, _ := term.GetSize(int(os.Stdout.Fd()))
-	editorState := editor.New(terminalWidth, terminalHeight, textReadFromFile)
+	editorState := editor.New(terminalWidth, terminalHeight, initialText)
 	render.Draw(os.Stdout, editorState, keys.KeyEvent{}, "")
 
 	for {
@@ -44,6 +44,7 @@ func main() {
 				saveState = "Error in saving"
 			} else {
 				saveState = "Saved successfuly"
+				editorState.MarkSaved()
 			}
 		}
 
@@ -64,7 +65,6 @@ func readFromFile(path string) (string, error) {
 		if err == io.EOF {
 			if len(line) > 0 {
 				builder.WriteString(line)
-				builder.WriteString("\n")
 			}
 			break
 		}
@@ -74,7 +74,6 @@ func readFromFile(path string) (string, error) {
 		}
 
 		builder.WriteString(line)
-		builder.WriteString("\n")
 	}
 
 	return builder.String(), nil

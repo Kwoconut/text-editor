@@ -18,6 +18,7 @@ type EditorState struct {
 	width     int
 	height    int
 	rowOffset int
+	isDirty   bool
 }
 
 func New(w, h int, text string) *EditorState {
@@ -28,6 +29,7 @@ func New(w, h int, text string) *EditorState {
 		width:     w,
 		height:    h,
 		rowOffset: 0,
+		isDirty:   false,
 	}
 }
 
@@ -80,6 +82,14 @@ func (es *EditorState) Text() string {
 	return builder.String()
 }
 
+func (es *EditorState) MarkSaved() {
+	es.isDirty = false
+}
+
+func (es *EditorState) IsDirty() bool {
+	return es.isDirty
+}
+
 func (es *EditorState) HandleKey(keyEvent keys.KeyEvent) Action {
 	if keyEvent.Kind == keys.KeyChar && keyEvent.Char == keys.CTRL_Q {
 		return ActionQuit
@@ -97,11 +107,14 @@ func (es *EditorState) HandleKey(keyEvent keys.KeyEvent) Action {
 	case keys.KeyChar:
 		if keyEvent.Char >= 32 && keyEvent.Char <= 126 {
 			es.insert(rune(keyEvent.Char))
+			es.isDirty = true
 		} else if keyEvent.Char == keys.BACKSPACE {
 			es.backspace()
+			es.isDirty = true
 		} else if keyEvent.Char == keys.ENTER {
 			es.enter()
-		} else if keyEvent.Char == keys.SAVE {
+			es.isDirty = true
+		} else if keyEvent.Char == keys.CTRL_S {
 			return ActionSave
 		}
 	}
@@ -117,7 +130,10 @@ func initializeText(text string) [][]rune {
 	readLines := strings.Split(text, "\n")
 
 	if len(readLines) != 0 {
-		for _, readLine := range readLines {
+		for index, readLine := range readLines {
+			if index == len(readLine)-1 {
+				break
+			}
 			lines = append(lines, []rune(readLine))
 		}
 	} else {
