@@ -17,11 +17,13 @@ func Draw(w io.Writer, es *editor.EditorState, last keys.KeyEvent) {
 	screenW := es.Width()
 	screenH := es.Height()
 	contentW := screenW
-	contentH := screenH - 1
+	contentH :=  screenH - 1
+	rowOffset := es.RowOffset()
 
 	for y := 0; y < contentH; y++ {
-		if y < es.LineCount() {
-			currentLine := es.Line(y)
+		docY := rowOffset + y
+		if docY < es.LineCount() {
+			currentLine := es.Line(docY)
 
 			currentX := 0
 			for currentX < contentW {
@@ -49,6 +51,7 @@ func Draw(w io.Writer, es *editor.EditorState, last keys.KeyEvent) {
 
 	fmt.Fprintf(&stringBuilder, "Ctrl+Q to quit | Last key: %s | Screen size: %d:%d", keys.KeyLabel(last), screenW, screenH)
 	cursorX, cursorY := es.Cursor()
-	fmt.Fprintf(&stringBuilder, "\x1b[%d;%dH", cursorY+1, cursorX+1) // ANSI cursor positions are 1-based
+	screenCursorY := cursorY - rowOffset
+	fmt.Fprintf(&stringBuilder, "\x1b[%d;%dH", screenCursorY+1, cursorX+1) // ANSI cursor positions are 1-based
 	io.WriteString(w, stringBuilder.String())
 }

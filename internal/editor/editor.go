@@ -10,20 +10,22 @@ const (
 )
 
 type EditorState struct {
-	cursorX int
-	cursorY int
-	lines   [][]rune
-	width   int
-	height  int
+	cursorX   int
+	cursorY   int
+	lines     [][]rune
+	width     int
+	height    int
+	rowOffset int
 }
 
 func New(w, h int) *EditorState {
 	return &EditorState{
-		cursorX: 0,
-		cursorY: 0,
-		lines:   [][]rune{[]rune{}},
-		width:   w,
-		height:  h,
+		cursorX:   0,
+		cursorY:   0,
+		lines:     [][]rune{[]rune{}},
+		width:     w,
+		height:    h,
+		rowOffset: 0,
 	}
 }
 
@@ -43,6 +45,18 @@ func (es *EditorState) UpdateSize(w, h int) {
 	es.width = w
 	es.height = h
 	es.clampCursor()
+	es.adjustRowOffset()
+}
+
+func (es *EditorState) ContentHeight() int {
+	if es.height <= 1 {
+		return 0
+	}
+	return es.height - 1
+}
+
+func (es *EditorState) RowOffset() int {
+	return es.rowOffset
 }
 
 func (es *EditorState) LineCount() int {
@@ -77,8 +91,30 @@ func (es *EditorState) HandleKey(keyEvent keys.KeyEvent) Action {
 		}
 	}
 
+
 	es.clampCursor()
+	es.adjustRowOffset()
 	return ActionNone
+}
+
+func (es *EditorState) adjustRowOffset() {
+	if es.ContentHeight() <= 0 {
+		es.rowOffset = 0
+		return
+	}
+
+	maxTop := max(0, es.LineCount() - es.ContentHeight())
+
+
+	if es.cursorY < es.rowOffset {
+		es.rowOffset = es.cursorY
+	} else if es.cursorY >= es.rowOffset+es.ContentHeight() {
+		es.rowOffset = es.cursorY - es.ContentHeight() + 1
+	}
+
+	if es.rowOffset > maxTop {
+		es.rowOffset = maxTop
+	}
 }
 
 func (es *EditorState) clampCursor() {
