@@ -9,7 +9,7 @@ import (
 	"texteditor/internal/keys"
 )
 
-func Draw(w io.Writer, es *editor.EditorState, last keys.KeyEvent) {
+func Draw(w io.Writer, es *editor.EditorState, last keys.KeyEvent, saveState string) {
 	var stringBuilder strings.Builder
 	stringBuilder.WriteString("\x1b[2J")
 	stringBuilder.WriteString("\x1b[H")
@@ -49,7 +49,7 @@ func Draw(w io.Writer, es *editor.EditorState, last keys.KeyEvent) {
 		stringBuilder.WriteString("\r\n")
 	}
 
-	fmt.Fprintf(&stringBuilder, "Ctrl+Q to quit | Last key: %s | Screen size: %d:%d", keys.KeyLabel(last), screenW, screenH)
+	fmt.Fprintf(&stringBuilder, "Ctrl+Q to quit | Last key: %s | Screen size: %d:%d | %s", keys.KeyLabel(last), screenW, screenH, saveState)
 	cursorX, cursorY := es.Cursor()
 	screenCursorY := cursorY - rowOffset
 	fmt.Fprintf(&stringBuilder, "\x1b[%d;%dH", screenCursorY+1, cursorX+1) // ANSI cursor positions are 1-based

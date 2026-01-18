@@ -27,6 +27,7 @@ const (
 	CTRL_Q             = 17
 	BACKSPACE          = 127
 	ENTER              = 13
+	SAVE               = 19
 )
 
 func ReadKey(r io.Reader) KeyEvent {
@@ -77,7 +78,9 @@ func KeyLabel(keyEvent KeyEvent) string {
 	case KeyChar:
 		if keyEvent.Char == ENTER {
 			return "ENTER"
-		} else if keyEvent.Char < 32 && keyEvent.Char != ENTER {
+		} else if keyEvent.Char == SAVE {
+			return "SAVE - CTRL_S"
+		}	else if keyEvent.Char < 32{
 			return fmt.Sprintf("%d", keyEvent.Char)
 		} else if keyEvent.Char < 127 {
 			return string(keyEvent.Char)

@@ -1,12 +1,14 @@
 package editor
 
 import "texteditor/internal/keys"
+import "strings"
 
 type Action int
 
 const (
 	ActionNone Action = iota
 	ActionQuit
+	ActionSave
 )
 
 type EditorState struct {
@@ -18,11 +20,11 @@ type EditorState struct {
 	rowOffset int
 }
 
-func New(w, h int) *EditorState {
+func New(w, h int, text string) *EditorState {
 	return &EditorState{
 		cursorX:   0,
 		cursorY:   0,
-		lines:     [][]rune{[]rune{}},
+		lines:     initializeText(text),
 		width:     w,
 		height:    h,
 		rowOffset: 0,
@@ -67,6 +69,17 @@ func (es *EditorState) Line(y int) []rune {
 	return es.lines[y]
 }
 
+func (es *EditorState) Text() string {
+	var builder strings.Builder
+
+	for _, line := range es.lines {
+		builder.WriteString(string(line))
+		builder.WriteString("\n")
+	}
+
+	return builder.String()
+}
+
 func (es *EditorState) HandleKey(keyEvent keys.KeyEvent) Action {
 	if keyEvent.Kind == keys.KeyChar && keyEvent.Char == keys.CTRL_Q {
 		return ActionQuit
@@ -88,13 +101,30 @@ func (es *EditorState) HandleKey(keyEvent keys.KeyEvent) Action {
 			es.backspace()
 		} else if keyEvent.Char == keys.ENTER {
 			es.enter()
+		} else if keyEvent.Char == keys.SAVE {
+			return ActionSave
 		}
 	}
-
 
 	es.clampCursor()
 	es.adjustRowOffset()
 	return ActionNone
+}
+
+func initializeText(text string) [][]rune {
+	var lines [][]rune
+
+	readLines := strings.Split(text, "\n")
+
+	if len(readLines) != 0 {
+		for _, readLine := range readLines {
+			lines = append(lines, []rune(readLine))
+		}
+	} else {
+		lines = [][]rune{[]rune{}}
+	}
+
+	return lines
 }
 
 func (es *EditorState) adjustRowOffset() {
@@ -103,8 +133,7 @@ func (es *EditorState) adjustRowOffset() {
 		return
 	}
 
-	maxTop := max(0, es.LineCount() - es.ContentHeight())
-
+	maxTop := max(0, es.LineCount()-es.ContentHeight())
 
 	if es.cursorY < es.rowOffset {
 		es.rowOffset = es.cursorY
