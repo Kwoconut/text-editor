@@ -16,26 +16,28 @@ const (
 )
 
 type EditorState struct {
-	cursorX   int
-	cursorY   int
-	lines     [][]rune
-	width     int
-	height    int
-	rowOffset int
-	colOffset int
-	isDirty   bool
+	cursorX    int
+	cursorY    int
+	preferredX int
+	lines      [][]rune
+	width      int
+	height     int
+	rowOffset  int
+	colOffset  int
+	isDirty    bool
 }
 
 func New(w, h int, text string) *EditorState {
 	return &EditorState{
-		cursorX:   0,
-		cursorY:   0,
-		lines:     initializeText(text),
-		width:     w,
-		height:    h,
-		rowOffset: 0,
-		colOffset: 0,
-		isDirty:   false,
+		cursorX:    0,
+		cursorY:    0,
+		preferredX: 0,
+		lines:      initializeText(text),
+		width:      w,
+		height:     h,
+		rowOffset:  0,
+		colOffset:  0,
+		isDirty:    false,
 	}
 }
 
@@ -266,6 +268,8 @@ func (es *EditorState) moveLeft() {
 		es.cursorY--
 		es.cursorX = len(es.lines[es.cursorY])
 	}
+
+	es.preferredX = es.cursorX
 }
 
 func (es *EditorState) moveRight() {
@@ -275,14 +279,28 @@ func (es *EditorState) moveRight() {
 		es.cursorY++
 		es.cursorX = 0
 	}
+
+	es.preferredX = es.cursorX
 }
 
 func (es *EditorState) moveUp() {
 	es.cursorY--
+
+	if es.cursorY < 0 {
+		es.cursorY = 0
+	}
+
+	es.cursorX = min(es.preferredX, len(es.lines[es.cursorY]))
 }
 
 func (es *EditorState) moveDown() {
 	es.cursorY++
+
+	if es.cursorY >= len(es.lines) {
+		es.cursorY = len(es.lines) - 1
+	}
+
+	es.cursorX = min(es.preferredX, len(es.lines[es.cursorY]))
 }
 
 func (es *EditorState) insert(ch rune) {
@@ -295,6 +313,7 @@ func (es *EditorState) insert(ch rune) {
 
 	es.lines[es.cursorY] = line
 	es.cursorX++
+	es.preferredX = es.cursorX
 }
 
 func (es *EditorState) backspace() {
@@ -309,6 +328,7 @@ func (es *EditorState) backspace() {
 		line = line[:len(line)-1]
 		es.lines[es.cursorY] = line
 		es.cursorX--
+		es.preferredX = es.cursorX
 		return
 	}
 
@@ -320,6 +340,7 @@ func (es *EditorState) backspace() {
 	es.lines = append(es.lines[:es.cursorY], es.lines[es.cursorY+1:]...)
 	es.cursorY--
 	es.cursorX = oldLen
+	es.preferredX = es.cursorX
 }
 
 func (es *EditorState) enter() {
@@ -330,6 +351,7 @@ func (es *EditorState) enter() {
 	es.lines = append(es.lines[:es.cursorY+1], append([][]rune{right}, es.lines[es.cursorY+1:]...)...)
 	es.cursorY++
 	es.cursorX = 0
+	es.preferredX = es.cursorX
 }
 
 func (es *EditorState) home() {
@@ -337,6 +359,7 @@ func (es *EditorState) home() {
 
 	if len(line) <= 0 {
 		es.cursorX = 0
+		es.preferredX = es.cursorX
 		return
 	}
 
@@ -353,11 +376,14 @@ func (es *EditorState) home() {
 	} else {
 		es.cursorX = indentX
 	}
+
+	es.preferredX = es.cursorX
 }
 
 func (es *EditorState) end() {
 	line := es.lines[es.cursorY]
 	es.cursorX = len(line)
+	es.preferredX = es.cursorX
 }
 
 func (es *EditorState) pageDown() {
@@ -371,6 +397,12 @@ func (es *EditorState) pageDown() {
 	}
 
 	es.cursorY += pageSize
+
+	if es.cursorY >= len(es.lines) {
+		es.cursorY = len(es.lines) - 1
+	}
+
+	es.cursorX = min(es.preferredX, len(es.lines[es.cursorY]))
 }
 
 func (es *EditorState) pageUp() {
@@ -384,4 +416,10 @@ func (es *EditorState) pageUp() {
 	}
 
 	es.cursorY -= pageSize
+
+	if es.cursorY < 0 {
+		es.cursorY = 0
+	}
+
+	es.cursorX = min(es.preferredX, len(es.lines[es.cursorY]))
 }
