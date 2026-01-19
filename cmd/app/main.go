@@ -77,7 +77,10 @@ func saveToFile(path string, text string) (string, error) {
 }
 
 func readFromFile(path string) (string, error) {
-	file, _ := os.Open(path)
+	file, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
 	defer file.Close()
 
 	var builder strings.Builder
@@ -104,12 +107,15 @@ func readFromFile(path string) (string, error) {
 }
 
 func writeToFile(path string, text string) error {
-	file, _ := os.Create(path)
+	file, err := os.Create(path)
+	if err != nil {
+		return err
+	}
 	defer file.Close()
 
 	textFileWriter := bufio.NewWriter(file)
 
-	_, err := textFileWriter.WriteString(text)
+	_, err = textFileWriter.WriteString(text)
 
 	if err != nil {
 		return err

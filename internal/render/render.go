@@ -10,57 +10,148 @@ import (
 )
 
 func Draw(w io.Writer, es *editor.EditorState, last keys.KeyEvent, statusMsg string) {
-	var stringBuilder strings.Builder
-	stringBuilder.WriteString("\x1b[2J")
-	stringBuilder.WriteString("\x1b[H")
-
 	screenW := es.Width()
 	screenH := es.Height()
+	if screenW <= 0 || screenH <= 0 {
+		return
+	}
+
 	contentW := screenW
 	contentH := screenH - 1
+	if contentH < 0 {
+		contentH = 0
+	}
+
 	rowOffset := es.RowOffset()
 	colOffset := es.ColOffset()
 
-	for y := 0; y < contentH; y++ {
-		docY := rowOffset + y
-		if docY < es.LineCount() {
-			currentLine := es.Line(docY)
+	var b strings.Builder
+	// Clear + home. Hide cursor during redraw to reduce flicker.
+	b.WriteString("\x1b[2J")
+	b.WriteString("\x1b[H")
 
-			currentX := colOffset
-			for currentX < contentW + colOffset {
-				if currentX < len(currentLine) {
-					stringBuilder.WriteRune(currentLine[currentX])
-				} else {
-					stringBuilder.WriteByte(' ')
-				}
-				currentX++
+	// Draw content area
+	for screenY := 0; screenY < contentH; screenY++ {
+		docY := rowOffset + screenY
+		if docY >= 0 && docY < es.LineCount() {
+			drawLine(&b, es.Line(docY), colOffset, contentW)
+		} else {
+			drawTildeRow(&b, contentW)
+		}
+		b.WriteString("\r\n")
+	}
+
+	// Status bar (pad/truncate to full width)
+	status := buildStatusLine(es, last, statusMsg)
+	status = fitWidth(status, screenW)
+	b.WriteString(status)
+
+	_, cursorY := es.Cursor()
+	screenCursorY := cursorY - rowOffset
+
+	rx := es.CursorRX()
+	screenCursorX := rx - colOffset
+
+	if contentH > 0 {
+		screenCursorY = clamp(screenCursorY, 0, contentH-1)
+	} else {
+		screenCursorY = 0
+	}
+	if contentW > 0 {
+		screenCursorX = clamp(screenCursorX, 0, contentW-1)
+	} else {
+		screenCursorX = 0
+	}
+
+	fmt.Fprintf(&b, "\x1b[%d;%dH", screenCursorY+1, screenCursorX+1) // 1-based
+	io.WriteString(w, b.String())
+}
+
+func expandTabs(line []rune, tabStop int) []rune {
+	var out []rune
+	col := 0
+	for _, ch := range line {
+		if ch == '\t' {
+			spaces := tabStop - (col % tabStop)
+			for i := 0; i < spaces; i++ {
+				out = append(out, ' ')
+				col++
 			}
 		} else {
-			currentX := colOffset
-			for currentX < contentW + colOffset {
-				if currentX == colOffset {
-					stringBuilder.WriteByte('~')
-				} else {
-					stringBuilder.WriteByte(' ')
-				}
-				currentX++
-			}
+			out = append(out, ch)
+			col++
 		}
-
-		stringBuilder.WriteString("\r\n")
 	}
+	return out
+}
 
-	fmt.Fprintf(&stringBuilder, "Ctrl+Q to quit | Last key: %s | Screen size: %d:%d |", keys.KeyLabel(last), screenW, screenH)
+func drawLine(b *strings.Builder, line []rune, colOffset, width int) {
+	rendered := expandTabs(line, 4)
+	lineLen := len(rendered)
+
+	for screenX := 0; screenX < width; screenX++ {
+		docX := colOffset + screenX
+		if docX >= 0 && docX < lineLen {
+			b.WriteRune(rendered[docX])
+		} else {
+			b.WriteByte(' ')
+		}
+	}
+}
+
+func drawTildeRow(b *strings.Builder, width int) {
+	for screenX := 0; screenX < width; screenX++ {
+		if screenX == 0 {
+			b.WriteByte('~')
+		} else {
+			b.WriteByte(' ')
+		}
+	}
+}
+
+func buildStatusLine(es *editor.EditorState, last keys.KeyEvent, statusMsg string) string {
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "Ctrl+Q to quit | Last key: %s | Screen size: %d:%d | Seq: %s |",
+		keys.KeyLabel(last), es.Width(), es.Height(), keys.SeqHex(last.Seq))
+
 	if es.IsDirty() {
-		fmt.Fprint(&stringBuilder, " * ")
+		sb.WriteString(" * ")
 	} else {
-		fmt.Fprint(&stringBuilder, "   ")
+		sb.WriteString("   ")
 	}
-	fmt.Fprintf(&stringBuilder, "| %s", statusMsg)
 
-	cursorX, cursorY := es.Cursor()
-	screenCursorY := cursorY - rowOffset
-	screenCursorX := cursorX - colOffset
-	fmt.Fprintf(&stringBuilder, "\x1b[%d;%dH", screenCursorY+1, screenCursorX+1) // ANSI cursor positions are 1-based
-	io.WriteString(w, stringBuilder.String())
+	if statusMsg != "" {
+		sb.WriteString("| ")
+		sb.WriteString(statusMsg)
+	}
+	return sb.String()
+}
+
+func fitWidth(s string, width int) string {
+	if width <= 0 {
+		return ""
+	}
+	r := []rune(s)
+	if len(r) > width {
+		return string(r[:width])
+	}
+	if len(r) < width {
+		var b strings.Builder
+		b.WriteString(string(r))
+		for i := 0; i < width-len(r); i++ {
+			b.WriteByte(' ')
+		}
+		return b.String()
+	}
+	return s
+}
+
+func clamp(v, lo, hi int) int {
+	if v < lo {
+		return lo
+	}
+	if v > hi {
+		return hi
+	}
+	return v
 }

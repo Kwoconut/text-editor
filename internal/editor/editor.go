@@ -6,6 +6,10 @@ import "strings"
 type Action int
 
 const (
+	TAB_STOP = 4
+)
+
+const (
 	ActionNone Action = iota
 	ActionQuit
 	ActionSave
@@ -45,6 +49,11 @@ func (es *EditorState) Height() int {
 
 func (es *EditorState) Cursor() (int, int) {
 	return es.cursorX, es.cursorY
+}
+
+func (es *EditorState) CursorRX() int {
+	line := es.lines[es.cursorY]
+	return cxToRx(line, es.cursorX, TAB_STOP)
 }
 
 func (es *EditorState) UpdateSize(w, h int) {
@@ -87,14 +96,16 @@ func (es *EditorState) Line(y int) []rune {
 }
 
 func (es *EditorState) Text() string {
-	var builder strings.Builder
+	var b strings.Builder
 
-	for _, line := range es.lines {
-		builder.WriteString(string(line))
-		builder.WriteString("\n")
+	for i, line := range es.lines {
+		if i > 0 {
+			b.WriteByte('\n')
+		}
+		b.WriteString(string(line))
 	}
 
-	return builder.String()
+	return b.String()
 }
 
 func (es *EditorState) MarkSaved() {
@@ -119,6 +130,10 @@ func (es *EditorState) HandleKey(keyEvent keys.KeyEvent) Action {
 		es.moveUp()
 	case keys.KeyDown:
 		es.moveDown()
+	case keys.KeyHome:
+		es.home()
+	case keys.KeyEnd:
+		es.end()
 	case keys.KeyChar:
 		if keyEvent.Char >= 32 && keyEvent.Char <= 126 {
 			es.insert(rune(keyEvent.Char))
@@ -145,14 +160,13 @@ func initializeText(text string) [][]rune {
 
 	readLines := strings.Split(text, "\n")
 
-	if len(readLines) != 0 {
-		for index, readLine := range readLines {
-			if index == len(readLines)-1 && readLine == "" {
-				break
-			}
-			lines = append(lines, []rune(readLine))
+	for index, readLine := range readLines {
+		if index == len(readLines)-1 && readLine == "" {
+			break
 		}
-	} else {
+		lines = append(lines, []rune(readLine))
+	}
+	if len(lines) == 0 {
 		lines = [][]rune{[]rune{}}
 	}
 
@@ -184,11 +198,39 @@ func (es *EditorState) adjustColOffset() {
 		return
 	}
 
-	if es.cursorX < es.colOffset {
-		es.colOffset = es.cursorX
-	} else if es.cursorX >= es.colOffset+es.ContentWidth() {
-		es.colOffset = es.cursorX - es.ContentWidth() + 1
+	line := es.lines[es.cursorY]
+	rx := cxToRx(line, es.cursorX, TAB_STOP)
+
+	if rx < es.colOffset {
+		es.colOffset = rx
+	} else if rx >= es.colOffset+es.ContentWidth() {
+		es.colOffset = rx - es.ContentWidth() + 1
 	}
+
+	if es.colOffset < 0 {
+		es.colOffset = 0
+	}
+}
+
+func cxToRx(line []rune, cx int, tabStop int) int {
+	if cx < 0 {
+		return 0
+	}
+	if cx > len(line) {
+		cx = len(line)
+	}
+
+	rx := 0
+	for i := 0; i < cx; i++ {
+		if line[i] == '\t' {
+			spaces := tabStop - (rx % tabStop)
+			rx += spaces
+		} else {
+			rx += 1
+		}
+	}
+
+	return rx
 }
 
 func (es *EditorState) clampCursor() {
@@ -284,4 +326,32 @@ func (es *EditorState) enter() {
 	es.lines = append(es.lines[:es.cursorY+1], append([][]rune{right}, es.lines[es.cursorY+1:]...)...)
 	es.cursorY++
 	es.cursorX = 0
+}
+
+func (es *EditorState) home() {
+	line := es.lines[es.cursorY]
+
+	if len(line) <= 0 {
+		es.cursorX = 0
+		return
+	}
+
+	indentX := 0
+	for indentX < len(line) {
+		if line[indentX] != ' ' && line[indentX] != '\t' {
+			break
+		}
+		indentX++
+	}
+
+	if es.cursorX == indentX {
+		es.cursorX = 0
+	} else {
+		es.cursorX = indentX
+	}
+}
+
+func (es *EditorState) end() {
+	line := es.lines[es.cursorY]
+	es.cursorX = len(line)
 }
