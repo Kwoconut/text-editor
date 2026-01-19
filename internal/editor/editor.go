@@ -18,6 +18,7 @@ type EditorState struct {
 	width     int
 	height    int
 	rowOffset int
+	colOffset int
 	isDirty   bool
 }
 
@@ -29,6 +30,7 @@ func New(w, h int, text string) *EditorState {
 		width:     w,
 		height:    h,
 		rowOffset: 0,
+		colOffset: 0,
 		isDirty:   false,
 	}
 }
@@ -50,6 +52,7 @@ func (es *EditorState) UpdateSize(w, h int) {
 	es.height = h
 	es.clampCursor()
 	es.adjustRowOffset()
+	es.adjustColOffset()
 }
 
 func (es *EditorState) ContentHeight() int {
@@ -59,8 +62,20 @@ func (es *EditorState) ContentHeight() int {
 	return es.height - 1
 }
 
+func (es *EditorState) ContentWidth() int {
+	if es.width <= 0 {
+		return 0
+	}
+
+	return es.width
+}
+
 func (es *EditorState) RowOffset() int {
 	return es.rowOffset
+}
+
+func (es *EditorState) ColOffset() int {
+	return es.colOffset
 }
 
 func (es *EditorState) LineCount() int {
@@ -121,6 +136,7 @@ func (es *EditorState) HandleKey(keyEvent keys.KeyEvent) Action {
 
 	es.clampCursor()
 	es.adjustRowOffset()
+	es.adjustColOffset()
 	return ActionNone
 }
 
@@ -131,7 +147,7 @@ func initializeText(text string) [][]rune {
 
 	if len(readLines) != 0 {
 		for index, readLine := range readLines {
-			if index == len(readLine)-1 {
+			if index == len(readLines)-1 && readLine == "" {
 				break
 			}
 			lines = append(lines, []rune(readLine))
@@ -159,6 +175,19 @@ func (es *EditorState) adjustRowOffset() {
 
 	if es.rowOffset > maxTop {
 		es.rowOffset = maxTop
+	}
+}
+
+func (es *EditorState) adjustColOffset() {
+	if es.ContentWidth() <= 0 {
+		es.colOffset = 0
+		return
+	}
+
+	if es.cursorX < es.colOffset {
+		es.colOffset = es.cursorX
+	} else if es.cursorX >= es.colOffset+es.ContentWidth() {
+		es.colOffset = es.cursorX - es.ContentWidth() + 1
 	}
 }
 

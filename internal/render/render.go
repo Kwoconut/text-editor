@@ -19,14 +19,15 @@ func Draw(w io.Writer, es *editor.EditorState, last keys.KeyEvent, statusMsg str
 	contentW := screenW
 	contentH := screenH - 1
 	rowOffset := es.RowOffset()
+	colOffset := es.ColOffset()
 
 	for y := 0; y < contentH; y++ {
 		docY := rowOffset + y
 		if docY < es.LineCount() {
 			currentLine := es.Line(docY)
 
-			currentX := 0
-			for currentX < contentW {
+			currentX := colOffset
+			for currentX < contentW + colOffset {
 				if currentX < len(currentLine) {
 					stringBuilder.WriteRune(currentLine[currentX])
 				} else {
@@ -35,9 +36,9 @@ func Draw(w io.Writer, es *editor.EditorState, last keys.KeyEvent, statusMsg str
 				currentX++
 			}
 		} else {
-			currentX := 0
-			for currentX < contentW {
-				if currentX == 0 {
+			currentX := colOffset
+			for currentX < contentW + colOffset {
+				if currentX == colOffset {
 					stringBuilder.WriteByte('~')
 				} else {
 					stringBuilder.WriteByte(' ')
@@ -59,6 +60,7 @@ func Draw(w io.Writer, es *editor.EditorState, last keys.KeyEvent, statusMsg str
 
 	cursorX, cursorY := es.Cursor()
 	screenCursorY := cursorY - rowOffset
-	fmt.Fprintf(&stringBuilder, "\x1b[%d;%dH", screenCursorY+1, cursorX+1) // ANSI cursor positions are 1-based
+	screenCursorX := cursorX - colOffset
+	fmt.Fprintf(&stringBuilder, "\x1b[%d;%dH", screenCursorY+1, screenCursorX+1) // ANSI cursor positions are 1-based
 	io.WriteString(w, stringBuilder.String())
 }
