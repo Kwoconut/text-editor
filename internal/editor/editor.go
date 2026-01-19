@@ -134,6 +134,10 @@ func (es *EditorState) HandleKey(keyEvent keys.KeyEvent) Action {
 		es.home()
 	case keys.KeyEnd:
 		es.end()
+	case keys.KeyPageDown:
+		es.pageDown()
+	case keys.KeyPageUp:
+		es.pageUp()
 	case keys.KeyChar:
 		if keyEvent.Char >= 32 && keyEvent.Char <= 126 {
 			es.insert(rune(keyEvent.Char))
@@ -354,4 +358,30 @@ func (es *EditorState) home() {
 func (es *EditorState) end() {
 	line := es.lines[es.cursorY]
 	es.cursorX = len(line)
+}
+
+func (es *EditorState) pageDown() {
+	contentH := es.ContentHeight()
+	var pageSize int
+
+	if contentH <= 1 {
+		pageSize = 1
+	} else {
+		pageSize = contentH - 1
+	}
+
+	es.cursorY += pageSize
+}
+
+func (es *EditorState) pageUp() {
+	contentH := es.ContentHeight()
+	var pageSize int
+
+	if contentH <= 1 {
+		pageSize = 1
+	} else {
+		pageSize = contentH - 1
+	}
+
+	es.cursorY -= pageSize
 }
