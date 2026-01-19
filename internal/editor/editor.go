@@ -54,6 +54,10 @@ func (es *EditorState) Cursor() (int, int) {
 }
 
 func (es *EditorState) CursorRX() int {
+	if len(es.lines) <= 0 {
+		return 0
+	}
+
 	line := es.lines[es.cursorY]
 	return cxToRx(line, es.cursorX, TAB_STOP)
 }
@@ -161,6 +165,36 @@ func (es *EditorState) HandleKey(keyEvent keys.KeyEvent) Action {
 	return ActionNone
 }
 
+func (es *EditorState) setCursorY(y int) {
+	if len(es.lines) == 0 {
+		es.lines = [][]rune{[]rune{}}
+	}
+
+	if y < 0 {
+		y = 0
+	}
+
+	if y >= len(es.lines) {
+		y = len(es.lines) - 1
+	}
+
+	es.cursorY = y
+	es.cursorX = min(es.preferredX, len(es.lines[es.cursorY]))
+}
+
+func (es *EditorState) setCursorX(x int) {
+	if x < 0 {
+		x = 0
+	}
+
+	if x > len(es.lines[es.cursorY]) {
+		x = len(es.lines[es.cursorY])
+	}
+
+	es.cursorX = x
+	es.preferredX = x
+}
+
 func initializeText(text string) [][]rune {
 	var lines [][]rune
 
@@ -263,44 +297,28 @@ func (es *EditorState) clampCursor() {
 
 func (es *EditorState) moveLeft() {
 	if es.cursorX > 0 {
-		es.cursorX--
+		es.setCursorX(es.cursorX - 1)
 	} else if es.cursorY > 0 {
-		es.cursorY--
-		es.cursorX = len(es.lines[es.cursorY])
+		es.setCursorY(es.cursorY - 1)
+		es.setCursorX(len(es.lines[es.cursorY]))
 	}
-
-	es.preferredX = es.cursorX
 }
 
 func (es *EditorState) moveRight() {
 	if es.cursorX < len(es.lines[es.cursorY]) {
-		es.cursorX++
+		es.setCursorX(es.cursorX + 1)
 	} else if es.cursorY < len(es.lines)-1 {
-		es.cursorY++
-		es.cursorX = 0
+		es.setCursorY(es.cursorY + 1)
+		es.setCursorX(0)
 	}
-
-	es.preferredX = es.cursorX
 }
 
 func (es *EditorState) moveUp() {
-	es.cursorY--
-
-	if es.cursorY < 0 {
-		es.cursorY = 0
-	}
-
-	es.cursorX = min(es.preferredX, len(es.lines[es.cursorY]))
+	es.setCursorY(es.cursorY - 1)
 }
 
 func (es *EditorState) moveDown() {
-	es.cursorY++
-
-	if es.cursorY >= len(es.lines) {
-		es.cursorY = len(es.lines) - 1
-	}
-
-	es.cursorX = min(es.preferredX, len(es.lines[es.cursorY]))
+	es.setCursorY(es.cursorY + 1)
 }
 
 func (es *EditorState) insert(ch rune) {
@@ -312,8 +330,7 @@ func (es *EditorState) insert(ch rune) {
 	line[x] = ch
 
 	es.lines[es.cursorY] = line
-	es.cursorX++
-	es.preferredX = es.cursorX
+	es.setCursorX(es.cursorX + 1)
 }
 
 func (es *EditorState) backspace() {
@@ -327,8 +344,7 @@ func (es *EditorState) backspace() {
 		copy(line[x-1:], line[x:])
 		line = line[:len(line)-1]
 		es.lines[es.cursorY] = line
-		es.cursorX--
-		es.preferredX = es.cursorX
+		es.setCursorX(es.cursorX - 1)
 		return
 	}
 
@@ -338,9 +354,8 @@ func (es *EditorState) backspace() {
 	newPreviousLine := append(previousLine, currentLine...)
 	es.lines[es.cursorY-1] = newPreviousLine
 	es.lines = append(es.lines[:es.cursorY], es.lines[es.cursorY+1:]...)
-	es.cursorY--
-	es.cursorX = oldLen
-	es.preferredX = es.cursorX
+	es.setCursorY(es.cursorY - 1)
+	es.setCursorX(oldLen)
 }
 
 func (es *EditorState) enter() {
@@ -349,17 +364,15 @@ func (es *EditorState) enter() {
 	right := line[es.cursorX:]
 	es.lines[es.cursorY] = left
 	es.lines = append(es.lines[:es.cursorY+1], append([][]rune{right}, es.lines[es.cursorY+1:]...)...)
-	es.cursorY++
-	es.cursorX = 0
-	es.preferredX = es.cursorX
+	es.setCursorY(es.cursorY + 1)
+	es.setCursorX(0)
 }
 
 func (es *EditorState) home() {
 	line := es.lines[es.cursorY]
 
 	if len(line) <= 0 {
-		es.cursorX = 0
-		es.preferredX = es.cursorX
+		es.setCursorX(0)
 		return
 	}
 
@@ -372,54 +385,33 @@ func (es *EditorState) home() {
 	}
 
 	if es.cursorX == indentX {
-		es.cursorX = 0
+		es.setCursorX(0)
 	} else {
-		es.cursorX = indentX
+		es.setCursorX(indentX)
 	}
-
-	es.preferredX = es.cursorX
 }
 
 func (es *EditorState) end() {
 	line := es.lines[es.cursorY]
-	es.cursorX = len(line)
-	es.preferredX = es.cursorX
+	es.setCursorX(len(line))
 }
 
 func (es *EditorState) pageDown() {
-	contentH := es.ContentHeight()
-	var pageSize int
-
-	if contentH <= 1 {
-		pageSize = 1
-	} else {
-		pageSize = contentH - 1
-	}
-
-	es.cursorY += pageSize
-
-	if es.cursorY >= len(es.lines) {
-		es.cursorY = len(es.lines) - 1
-	}
-
-	es.cursorX = min(es.preferredX, len(es.lines[es.cursorY]))
+	pageSize := es.computePageSize()
+	es.setCursorY(es.cursorY + pageSize)
 }
 
 func (es *EditorState) pageUp() {
+	pageSize := es.computePageSize()
+	es.setCursorY(es.cursorY - pageSize)
+}
+
+func (es *EditorState) computePageSize() int {
 	contentH := es.ContentHeight()
-	var pageSize int
 
 	if contentH <= 1 {
-		pageSize = 1
+		return 1
 	} else {
-		pageSize = contentH - 1
+		return contentH - 1
 	}
-
-	es.cursorY -= pageSize
-
-	if es.cursorY < 0 {
-		es.cursorY = 0
-	}
-
-	es.cursorX = min(es.preferredX, len(es.lines[es.cursorY]))
 }
