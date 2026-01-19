@@ -9,7 +9,7 @@ import (
 	"texteditor/internal/keys"
 )
 
-func Draw(w io.Writer, es *editor.EditorState, last keys.KeyEvent, saveState string) {
+func Draw(w io.Writer, es *editor.EditorState, last keys.KeyEvent, statusMsg string) {
 	var stringBuilder strings.Builder
 	stringBuilder.WriteString("\x1b[2J")
 	stringBuilder.WriteString("\x1b[H")
@@ -53,9 +53,9 @@ func Draw(w io.Writer, es *editor.EditorState, last keys.KeyEvent, saveState str
 	if es.IsDirty() {
 		fmt.Fprint(&stringBuilder, " * ")
 	} else {
-		fmt.Fprintf(&stringBuilder, " %s ", saveState)
+		fmt.Fprint(&stringBuilder, "   ")
 	}
-	fmt.Fprint(&stringBuilder, "|")
+	fmt.Fprintf(&stringBuilder, "| %s", statusMsg)
 
 	cursorX, cursorY := es.Cursor()
 	screenCursorY := cursorY - rowOffset

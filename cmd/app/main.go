@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"io"
 	"os"
 	"strings"
@@ -14,7 +15,15 @@ import (
 )
 
 func main() {
-	path := os.Args[1]
+	path := ""
+	initialText := ""
+	if len(os.Args) >= 2 {
+		path = os.Args[1]
+		initialText, _ = readFromFile(path)
+	}
+
+	statusMsg := ""
+	statusTTL := 0
 
 	oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
 	if err != nil {
@@ -22,10 +31,9 @@ func main() {
 	}
 	defer term.Restore(int(os.Stdin.Fd()), oldState)
 
-	initialText, _ := readFromFile(path)
 	terminalWidth, terminalHeight, _ := term.GetSize(int(os.Stdout.Fd()))
 	editorState := editor.New(terminalWidth, terminalHeight, initialText)
-	render.Draw(os.Stdout, editorState, keys.KeyEvent{}, "")
+	render.Draw(os.Stdout, editorState, keys.KeyEvent{}, statusMsg)
 
 	for {
 		terminalWidth, terminalHeight, _ := term.GetSize(int(os.Stdout.Fd()))
@@ -37,18 +45,34 @@ func main() {
 			break
 		}
 
-		saveState := ""
 		if action == editor.ActionSave {
-			err := writeToFile(path, editorState.Text())
-			if err != nil {
-				saveState = "Error in saving"
-			} else {
-				saveState = "Saved successfuly"
+			statusMsg, err = saveToFile(path, editorState.Text())
+			statusTTL = 10
+			if err == nil {
 				editorState.MarkSaved()
 			}
 		}
 
-		render.Draw(os.Stdout, editorState, keyEvent, saveState)
+		if statusTTL > 0 {
+			statusTTL--
+		} else {
+			statusMsg = ""
+		}
+
+		render.Draw(os.Stdout, editorState, keyEvent, statusMsg)
+	}
+}
+
+func saveToFile(path string, text string) (string, error) {
+	if path == "" {
+		return "No filename (Save As not implemented)", errors.New("No filename provided in startup arguments. Save As function not implemented yet.")
+	}
+
+	err := writeToFile(path, text)
+	if err != nil {
+		return "Error in saving", err
+	} else {
+		return "Saved successfuly", nil
 	}
 }
 
